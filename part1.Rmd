@@ -1,0 +1,353 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Outline
+
+1. 静态热力图
+2. 动态热力图
+
+```{r}
+China=readOGR(dsn="china-province-border-data/bou2_4p.shp")
+China_df=fortify(China)
+```
+
+
+```{r}
+chinaMap <- ggplot(China_df, aes(long,lat, group = group)) +
+    geom_polygon() +
+    coord_equal() +
+    labs(x = "Longitude (Degrees)",
+         y = "Latitude (Degrees)")
+
+chinaMap
+```
+
+```{r}
+log=read.csv("online_log.csv")
+```
+
+## 静态heatmap
+
+```{r}
+library("REmap")
+```
+
+```{r}
+log$orgId=as.factor(log$orgId)
+
+logall=log %>%
+    count(orgId)
+```
+
+```{r}
+organ=read_csv("organization.csv")
+```
+
+```{r}
+organ$orgId=as.numeric(as.character(organ$orgId))
+```
+
+
+
+```{r}
+logall=merge(logall,organ,by='orgId')
+```
+
+```{r}
+city_vec=c("江苏",'江苏','湖南','江苏','河南','山东','山东','上海','云南','湖南','河南','山东','浙江','河南','河北','湖南','上海','四川','安徽','山东')
+```
+
+```{r}
+logall$province=city_vec
+```
+
+
+```{r}
+geo=get_geo_position(city_vec)
+```
+
+```{r}
+geo$lat=as.character(geo$lat)
+geo$lon=as.character(geo$lon)
+```
+
+```{r}
+logall2=cbind(geo$lon,geo$lat,logall$n)
+```
+
+```{r}
+logall2=data.frame(logall2)
+colnames(logall2)=c("lon","lat","prob")
+```
+
+```{r}
+logall2$lon=as.character(logall2$lon)
+logall2$lat=as.character(logall2$lat)
+logall2$prob=as.numeric(as.character(logall2$prob))
+```
+
+```{r}
+logall2=mutate(logall2,prob=prob/sum(prob)) 
+```
+
+```{r}
+log$orgId=as.factor(log$orgId)
+logcount=log %>%
+    filter(type.1.student.2.teacher.==1) %>%
+    group_by(orgId) %>%
+    summarise(student=n_distinct(userId)) 
+```
+
+```{r}
+logall3=logall2
+logall3$prob=logall$orgId
+```
+
+```{r}
+colnames(logall3)=c("lon","lat","orgId")
+```
+
+```{r}
+logall3$orgId=as.character(logall3$orgId)
+```
+
+
+```{r}
+theme1 <- get_theme(theme = "none",
+                    lineColor = "white",
+                    backgroundColor = "white", 
+                    titleColor = "#fff",
+                    borderColor = "blue", 
+                    regionColor = "grey",
+                    labelShow = T, 
+                    pointShow = F, 
+                    pointColor = "gold"
+                    )
+
+remapH(logall2,maptype = 'china',theme = theme1,blurSize=70,color = c('red'),minAlpha = 10,opacity = 1)
+```
+
+```{r}
+pointdata=data.frame(logall3$orgId,color = "orange")
+remapB(get_city_coord("Shanghai"),zoom = 6,
+       color = "hardedge",
+       title = "Learnta Organization Geographical Distribution",markPointData = pointdata,markPointTheme = markPointControl(symbol = 'pin',
+                  symbolSize = "20",
+                  effect = T,
+                  color = "orange") ,geoData = logall3)
+```
+
+```{r}
+options(remap.js.web=T)   
+```
+
+```{r}
+t <- list(
+  family = "sans serif",
+  size = 1,
+  color = 'blue')
+plot_ly(logall) %>%
+    add_histogram(x=~province,marker = list(color = rep("orange",11)),xaxis=list(font=2))
+#chart_link = api_create(p, filename="histogram-horizontal")
+```
+
+```{r}
+logcount[19,]=c(100141,0)
+logcount[20,]=c(100145,0)
+```
+
+```{r}
+logcount=logcount[c(1:16,19,17,20,18),]
+```
+
+```{r}
+logcount[,c(3,4)]=logall3[,c(1,2)]
+logcount=logcount[,-1]
+logcount=logcount[,c(2,3,1)]
+```
+
+```{r}
+logcount[2,c(1,2)]=c(118.801816,32.057046)
+logcount[4,c(1,2)]=c(118.821816,32.047046)
+logcount[8,c(1,2)]=c(121.461869,31.216739)
+logcount[9,c(1,2)]=c(117.082219,36.671721)
+logcount[11,c(1,2)]=c(121.461869,31.226739)
+logcount[12,c(1,2)]=c(121.548800,31.231150)
+logcount[15,c(1,2)]=c(117.072219,36.681721)
+logcount[16,c(1,2)]=c(118.831816,32.047046)
+logcount[17,c(1,2)]=c(118.821816,32.067046)
+logcount[18,c(1,2)]=c(121.461869,31.206739)
+logcount[19,c(1,2)]=c(118.811816,32.067046)
+logcount[15,c(1,2)]=c(117.082219,36.681721)
+```
+
+```{r}
+logcountprob=mutate(logcount,prob=student/sum(student))
+logcountprob=logcountprob[,-3]
+```
+
+```{r}
+logcountprob$lon=as.character(unlist(logcountprob$lon))
+logcountprob$lat=as.character(unlist(logcountprob$lat))
+logcountprob$prob=as.numeric(unlist(logcountprob$prob))
+```
+
+```{r}
+logcountprob=data.frame(logcountprob)
+```
+
+
+```{r}
+logcountprob[,c(1,2)]=logall2[,c(1,2)]
+```
+
+```{r}
+logcountprob[17,3]=0
+logcountprob[19,3]=0
+```
+
+```{r}
+theme2 <- get_theme(theme = "none",
+                    lineColor = "white",
+                    backgroundColor = "white", 
+                    titleColor = "#fff",
+                    borderColor = "white", 
+                    regionColor = "grey",
+                    labelShow = T, 
+                    pointShow = T, 
+                    pointColor = "gold"
+                    )
+
+remapH(logcountprob,maptype = 'china',theme = theme2, blurSize=70,color= c('red'),minAlpha = 10,opacity = 1)
+```
+
+```{r}
+logcountprob2=data.frame(province=c("江苏",'江苏','湖南','江苏','河南','山东','山东','上海','云南','湖南','河南','山东','浙江','河南','河北','湖南','上海','四川','安徽','山东'),student=logcount[,3])
+
+```
+
+
+```{r}
+remapC(logcountprob2,color=c("orange","white"))
+```
+
+
+
+```{r}
+logcount$orgId=as.character(unlist(logcount$orgId))
+```
+
+```{r}
+provinceeng=c(rep("Jiangsu",2),"Hunan","Jiangsu","Henan",rep("Shandong",2),"Shanghai","Yunnan","Hunan","Henan","Shandong","Zhejiang","Henan","Hebei","Hunan","Shanghai","Sichuan","Anhui","Shandong")
+```
+
+
+```{r}
+logcount$province=provinceeng
+logcount=logcount %>%
+    arrange(province)
+```
+
+
+
+
+```{r}
+ggplot(logcount,aes(y=student,x=province))+geom_bar(stat = "identity",fill="orange",color="white")+theme_light()
+```
+
+
+
+```{r}
+logcount2=log %>%
+    filter(type.1.student.2.teacher.==2) %>%
+    group_by(orgId) %>%
+    summarise(teacher=n_distinct(userId)) 
+```
+
+```{r}
+logcount2$province=provinceeng
+
+logcount22=logcount2 %>%
+    arrange(province)
+```
+
+```{r}
+logcount2prob=data.frame(province=c("江苏",'江苏','湖南','江苏','河南','山东','山东','上海','云南','湖南','河南','山东','浙江','河南','河北','湖南','上海','四川','安徽','山东'),teacher=logcount2[,2])
+```
+
+```{r}
+remapC(logcount2prob,color=c("orange","white"))
+```
+
+
+```{r}
+ggplot(logcount22,aes(y=teacher,x=province))+geom_bar(stat = "identity",fill="orange",color="white")+theme_light()
+```
+
+
+```{r}
+logcount3=log %>%
+    group_by(orgId) %>%
+    summarise(member=n_distinct(userId)) 
+```
+
+```{r}
+logcount3prob=data.frame(province=c("江苏",'江苏','湖南','江苏','河南','山东','山东','上海','云南','湖南','河南','山东','浙江','河南','河北','湖南','上海','四川','安徽','山东'),members=logcount3[,2])
+```
+
+```{r}
+remapC(logcount3prob,color=c("orange","white"))
+```
+
+```{r}
+logcount3$province=provinceeng
+
+logcount32=logcount3 %>%
+    arrange(province)
+```
+
+```{r}
+ggplot(logcount32,aes(y=member,x=province))+geom_bar(stat = "identity",fill="orange",color="white")+theme_light()
+```
+
+```{r}
+lograte=logcount2prob %>%
+    transmute(rate=logcountprob2$student/teacher) %>%
+    mutate(province=logcount2prob$province) %>%
+    mutate(id=logcount2$orgId)
+```
+
+```{r}
+lograte=lograte[,c(2,1)]
+```
+
+```{r}
+remapC(lograte,color=c("orange","white"))
+```
+
+```{r}
+lograte=lograte %>%
+    arrange(province)
+```
+
+```{r}
+names(log)[5]='status'
+names(log)[6]="Type"
+```
+
+```{r}
+log1=log %>%
+    select(userId,Type) %>%
+    unique()
+```
+
+```{r}
+length(log1$userId)
+```
+
+```{r}
+length(unique(log1$userId))
+```
+

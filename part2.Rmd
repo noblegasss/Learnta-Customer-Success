@@ -1,0 +1,779 @@
+---
+title: "Part B"
+author: "Wei Zhang"
+date: "3/29/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(gdata)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(chron)
+```
+
+## data cleanning
+
+```{r}
+df = read.csv("ChallengeB_Supplement_onlinelog.csv")
+```
+
+###select the school 
+```{r}
+data <- subset(df, orgId == 100082)
+```
+
+###status(1=enter classroom;2= exit classrroom;3=log in;4= log out)
+```{r}
+names(data)[5]<-"status"
+```
+
+###type(1=student;2=teacher)
+```{r}
+names(data)[6]<-"type"
+```
+
+```{r}
+names(data)[7]<-"timestamp"
+```
+
+
+```{r}
+data$timestamp <- as.POSIXct(data$timestamp)
+```
+############################################ split
+
+
+
+###Calculate the time duration for log in and log out
+
+###get the log in and log out observations
+```{r}
+data1 <- filter(data, status %in% c(3, 4))
+```
+
+```{r}
+summary(data1)
+```
+
+###get the students observations
+```{r}
+ex <- subset(data1, type == 1 )
+```
+
+```{r}
+res <- ex %>% 
+  arrange(userId,timestamp) %>%
+  group_by(userId) %>% 
+  mutate(duration = ifelse(status > lag(status), timestamp - lag(timestamp),NA)) %>% ##Calculate time duration
+  mutate(weekNum = week(timestamp))  %>% #get the week number according to time
+  group_by(userId,weekNum) %>%
+  mutate(durationSum = sum(duration, na.rm = TRUE))
+```
+
+## 在线时长
+
+```{r}
+head(res)
+```
+
+```{r}
+daily <- ex %>% 
+  arrange(userId,timestamp) %>%
+  group_by(userId) %>% 
+  mutate(duration = ifelse(status > lag(status), timestamp - lag(timestamp),NA)) 
+  #group_by(timestamp,hournumber) %>%
+  #mutate(student=n_distinct(userId))
+  #mutate(time=round(timestamp,"hour"))
+```
+
+```{r}
+daily$time=floor_date(daily$timestamp,"hours")
+```
+
+```{r}
+daily=daily %>%
+    arrange(time,userId) %>%
+    group_by(time) %>%
+    mutate(student=n_distinct(userId))
+```
+
+```{r}
+ts_day=daily %>%
+    select(time,student) %>%
+    unique()
+```
+
+```{r}
+time=data.frame(time=seq.POSIXt(floor_date(as.POSIXct("2018-12-01 8:00",'%m/%d/%y %H:%M')), floor_date(as.POSIXct("2019-03-17 0:00",'%m/%d/%y %H:%M')), by="hours"))
+```
+
+
+```{r}
+ts_day2=merge(ts_day,time,all=TRUE)
+ts_day2[is.na(ts_day2)]=0
+```
+
+```{r}
+p=plot_ly(ts_day2,x=~time) %>%
+    add_bars(y=~student) %>%
+    layout(
+    title = "Hourly Student Numbers",
+    xaxis = list(
+      rangeselector = list(
+        buttons = list(
+          list(
+            step = "hour",
+            stepmode = "backward"))),rangeslider = list(type = "date")))
+
+chart_link = api_create(p, filename="Range")
+chart_link
+```
+
+```{r}
+Sys.setenv("plotly_api_key"="EK6S5pjxttogItGOPo8Y")
+Sys.setenv("plotly_username"="noblegasss")
+```
+
+
+```{r}
+length(unique(ex$userId))
+```
+
+```{r}
+number=data.frame(count=c(rep("Student",66),rep("Teacher",26)))
+```
+
+```{r}
+plot_ly(data=number,labels=~count,type="pie",textinfo = 'label+percent',marker=list(colors=c('rgb(128,133,133)', 'rgb(211,94,96)')))
+```
+
+
+## tearchers
+
+```{r}
+teachers <- subset(data1, type == 2 )
+
+daily2 <- teachers %>% 
+    arrange(userId,timestamp) %>%
+    group_by(userId) %>% 
+    mutate(duration = ifelse(status > lag(status), timestamp - lag(timestamp),NA)) 
+
+daily2$time=floor_date(daily2$timestamp,"hours")
+
+daily2=daily2 %>%
+    arrange(time,userId) %>%
+    group_by(time) %>%
+    mutate(teacher=n_distinct(userId))
+
+ts2_day=daily2 %>%
+    select(time,teacher) %>%
+    unique()
+
+#time=data.frame(time=seq.POSIXt(floor_date(as.POSIXct("2018-12-01 8:00",'%m/%d/%y %H:%M')), floor_date(as.POSIXct("2019-03-17 0:00",'%m/%d/%y %H:%M')), by="hours"))
+
+ts2_day2=merge(ts2_day,time,all=TRUE)
+ts2_day2[is.na(ts2_day2)]=0
+
+p=plot_ly(ts2_day2,x=~time) %>%
+    add_bars(y=~teacher) %>%
+    layout(
+        title = "Hourly Teacher Numbers",
+        xaxis = list(
+            rangeselector = list(
+                buttons = list(
+                    list(
+                        step = "hour",
+                        stepmode = "backward"))),rangeslider = list(type = "date")))
+
+chart_link = api_create(p, filename="teacher")
+chart_link
+```
+
+```{r}
+length(unique(teachers$userId))
+```
+
+
+日均上线人数
+日均登陆人数
+
+## tearchers
+
+```{r}
+daily3 <- data1 %>% 
+    arrange(userId,timestamp) %>%
+    group_by(userId) %>% 
+    mutate(duration = ifelse(status > lag(status), timestamp - lag(timestamp),NA)) 
+
+daily3$time=floor_date(daily3$timestamp,"hours")
+
+daily3=daily3 %>%
+    arrange(time,userId) %>%
+    group_by(time) %>%
+    mutate(all=n_distinct(userId))
+
+tsall_day=daily3 %>%
+    select(time,all) %>%
+    unique()
+
+#time=data.frame(time=seq.POSIXt(floor_date(as.POSIXct("2018-12-01 8:00",'%m/%d/%y %H:%M')), floor_date(as.POSIXct("2019-03-17 0:00",'%m/%d/%y %H:%M')), by="hours"))
+
+tsall_day2=merge(tsall_day,time,all=TRUE)
+tsall_day2[is.na(tsall_day2)]=0
+
+p=plot_ly(tsall_day2,x=~time) %>%
+    add_bars(y=~all) %>%
+    layout(
+        title = "Hourly Numbers",
+        xaxis = list(
+            rangeselector = list(
+                buttons = list(
+                    list(
+                        step = "hour",
+                        stepmode = "backward"))),rangeslider = list(type = "date")))
+
+chart_link = api_create(p, filename="all")
+chart_link
+```
+
+
+## Vital Signs
+
+```{r}
+day4=day3
+day4$time=as.factor(day4$time)
+```
+
+
+```{r}
+ggpairs(day3[,c(1,2,3)],aes(alpha=0.75), lower=list(continuous="smooth"))+ theme_bw()+
+labs(title="Correlation Plot")+
+theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=12))
+```
+
+```{r}
+corrplot::corrplot(day3)
+```
+
+
+```{r}
+day3=day_2
+day3$time=c(1:97)
+```
+
+
+```{r}
+poi=glm(usernum~time,data=day3,family=poisson(link="log"))
+poi2=glm(usernum~weekNum,data=weekly_2,family=poisson(link="log"))
+```
+
+```{r}
+summary(poi)
+summary(poi2)
+```
+
+```{r}
+plot(poi)
+plot(poi2)
+```
+
+
+```{r}
+predict(poi2,type="response")
+```
+
+```{r}
+poi3=glm(logintimes~time,data=day3,family=poisson(link="log"))
+```
+
+```{r}
+summary(poi3)
+```
+
+```{r}
+ts1=ts(data=day3$usernum,frequency=365,start = c(2018,12))
+ts2=ts(data = week2$usernum,frequency=52,start = c(2018,12))
+```
+
+```{r}
+ts1.mo=auto.arima(ts1)
+```
+```{r}
+ts2.mo=auto.arima(ts2)
+```
+
+
+```{r}
+summary(ts1.mo)
+```
+
+```{r}
+ts3=ts(data=day3$logintimes,frequency=365,start = c(2018,12))
+ts3.mo=auto.arima(ts3)
+```
+
+```{r}
+summary(ts3.mo)
+```
+
+
+```{r}
+ts1.mo %>%
+  forecast(h=3) %>%
+  autoplot() +
+    ylab("Login") +  xlab("Time")
+```
+
+```{r}
+ts3.mo %>%
+  forecast(h=3) %>%
+  autoplot() +
+    ylab("Users") +  xlab("Time")
+```
+
+
+```{r}
+ggplot(dat=day3, aes(time, logintimes)) + 
+      geom_point() +
+      geom_smooth(method="glm", method.args=list(family="poisson"), 
+                  fullrange=TRUE, se=TRUE) +
+      xlim(0, 100)
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+ts2.mo %>%
+  forecast(h=2) %>%
+  autoplot() +
+    ylab("Users") +  xlab("Time")
+```
+
+```{r}
+ggplot(dat=day3, aes(time, usernum)) + 
+      geom_point() +
+      geom_smooth(method="glm", method.args=list(family="poisson"), 
+                  fullrange=TRUE, se=TRUE) +
+      xlim(0, 100)
+```
+
+```{r}
+d <- data.frame(time=0:100)
+pred=predict(poi,d,type="response")
+f=data.frame(time=0:100,pre=pred)
+```
+
+```{r}
+plot_ly() %>%
+    add_trace(data=d,x=~time,y=~pred,add=TRUE,name="Predict") %>%
+    add_trace(data=day3,y=~usernum,x=~time,name="Ture Value")
+```
+
+
+```{r}
+d=data.frame(time=0:100,pred=pred)
+ggplot() + 
+  # prediction line
+  geom_line(data=f, aes(time, pred),color="red") +
+  # points - note different dataframe is used
+  geom_point(dat=day3, aes(time, usernum))
+```
+
+```{r}
+pred2=predict()
+```
+
+
+
+```{r}
+e <- data.frame(weekNum=0:20)
+pred2=predict(poi2,e,type="response")
+```
+
+```{r}
+ggplot(dat=week2, aes(weekNum, logintimes)) + 
+      geom_point() +
+      geom_smooth(method="glm", method.args=list(family="poisson"), 
+                  fullrange=TRUE, se=TRUE) +
+      xlim(0, 20)
+```
+
+
+```{r}
+ggplot(dat=week2, aes(weekNum, usernum)) + 
+      geom_point() +
+      geom_smooth(method="glm", method.args=list(family="poisson"), 
+                  fullrange=TRUE, se=TRUE) +
+      xlim(0, 20)
+```
+
+
+## Negative Binomial Regression
+
+```{r}
+nb=glm.nb(usernum~time,data=day3)
+```
+
+```{r}
+summary(nb)
+```
+
+```{r}
+pred3=predict(nb,d,type="response")
+res=data.frame(time=d,pre=pred3)
+```
+
+```{r}
+plot_ly() %>%
+    add_trace(data=res,x=~time,y=~pred3,add=TRUE,name="Predict") %>%
+    add_trace(data=day3,y=~usernum,x=~time,name="Ture Value")
+```
+
+
+```{r}
+nb2=glm.nb(logintimes~time,data=day3)
+pred4=predict(nb,d,type="response")
+re2=data.frame(time=d,pre=pred4)
+```
+
+```{r}
+plot_ly() %>%
+    add_trace(data=re2,x=~time,y=~pred4,add=TRUE,name="Predict") %>%
+    add_trace(data=day3,y=~logintimes,x=~time,name="Ture Value")
+```
+
+
+```{r}
+nb3=glm.nb(usernum~weekNum,data=week2)
+nb4=glm.nb(logintimes~weekNum,data=week2)
+```
+
+```{r}
+pred5=predict(nb3,e,type="response")
+re3=data.frame(time=e,pre=pred5)
+```
+
+```{r}
+plot_ly() %>%
+    add_trace(data=re3,x=~weekNum,y=~pred5,add=TRUE,name="Predict") %>%
+    add_trace(data=week2,y=~usernum,x=~weekNum,name="Ture Value")
+```
+
+```{r}
+pred6=predict(nb4,e,type="response")
+re4=data.frame(time=e,pre=pred6)
+```
+
+```{r}
+plot_ly() %>%
+    add_trace(data=re4,x=~weekNum,y=~pred6,add=TRUE,name="Predict") %>%
+    add_trace(data=week2,y=~logintimes,x=~weekNum,name="Ture Value")
+```
+
+## active
+
+```{r}
+week=data1 %>%
+    arrange(timestamp) %>%
+    mutate(weekNum = week(timestamp))  %>% 
+    filter(status==3) %>%
+    group_by(weekNum) %>%
+    mutate(logintimes=length(userId)) %>%
+    mutate(usernum=n_distinct(userId)) %>%
+    mutate(avglogin=logintimes/usernum)
+    
+summary(week)
+```
+
+
+
+```{r}
+week2=week %>%
+    select(weekNum,logintimes,usernum,avglogin) %>%
+    unique()
+```
+
+```{r}
+week2=week2[c(1:18),]
+week2$weekNum=c(1:18)
+```
+
+
+```{r}
+summary(week2)
+```
+
+```{r}
+plot_ly(week2,x=~weekNum) %>%
+    add_bars(y=~logintimes,name="Login",color="red") %>%
+    add_bars(y=~usernum,name="Users",color="green") %>%
+    add_bars(y=~avglogin,name="Weekly Average",color="orange")
+```
+
+
+teacher：26
+student：66
+total：92
+
+active: 周login次数>7
+
+```{r}
+weekactive=week %>%
+    group_by(weekNum,userId) %>%
+    mutate(active = ifelse(length(id)>=3, 1,0)) %>%
+    select(weekNum,userId,active) %>%
+    unique() %>%
+    group_by(weekNum) %>%
+    mutate(total=length(userId)) %>%
+    filter(active==1) %>%
+    mutate(activenumber=length(userId)) %>%
+    select(weekNum,activenumber,total) %>%
+    unique() %>%
+    mutate(nonactive=total-activenumber)
+```
+
+```{r}
+weekactive$weekNum=c(1:18)
+summary(weekactive)
+```
+
+```{r}
+plot_ly(weekactive,x=~weekNum,mode="line") %>%
+    add_trace(y=~activenumber,name="Active",color="red") %>%
+    add_trace(y=~total,name="Total",color="blue")
+```
+
+```{r}
+data2=data1
+
+data2$time=floor_date(data2$timestamp,"hours")
+
+data2=data2 %>%
+    arrange(time,userId) %>%
+    group_by(time) %>%
+    mutate(all=n_distinct(userId)) %>%
+    mutate(numbers=length(userId))
+
+tslog_day=data2 %>%
+    select(time,all,numbers) %>%
+    unique()
+
+tslog_day2=merge(tslog_day,time,all=TRUE)
+tslog_day2[is.na(tslog_day2)]=0
+```
+
+```{r}
+a=plot_ly(tslog_day2,x=~time) %>%
+    add_bars(y=~numbers,name="Login") %>%
+    add_bars(y=~all,name="Users") %>%
+    layout(
+        title = "Hourly Logins and Users Numbers",
+        xaxis = list(
+            rangeselector = list(
+                buttons = list(
+                    list(
+                        step = "hour",
+                        stepmode = "backward"))),rangeslider = list(type = "date")))
+    
+chart_link = api_create(a, filename="login")
+chart_link
+```
+
+## daily
+
+```{r}
+
+day=data1
+day$time=floor_date(day$timestamp,"days")
+
+day=day %>%
+    filter(status==3) %>%
+    group_by(time) %>%
+    mutate(logintimes=length(userId)) %>%
+    mutate(usernum=n_distinct(userId))
+    
+summary(day)
+```
+
+```{r}
+day_2=day %>%
+    select(time,logintimes,usernum) %>%
+    unique()
+```
+
+
+```{r}
+time2=data.frame(time=seq.POSIXt(floor_date(as.POSIXct("2018-11-30",'%m/%d/%y')), floor_date(as.POSIXct("2019-03-17",'%m/%d/%y')), by="day"))
+```
+
+```{r}
+day2=merge(day_2,time2,by="time",all=TRUE)
+#day2[is.na(day2)]=0
+```
+
+```{r}
+b=plot_ly(day_2,x=~time) %>%
+    add_bars(y=~logintimes,name="Login") %>%
+    add_bars(y=~usernum,name="Users") %>%
+    layout(
+        title = "Daily Logins and Users Numbers",
+        xaxis = list(
+            rangeselector = list(
+                buttons = list(
+                    list(
+                        step = "day",
+                        stepmode = "backward"))),rangeslider = list(type = "date")))
+    
+chart_link = api_create(b, filename="dailylogin")
+chart_link
+```
+
+
+## weekly
+
+```{r}
+weekly=data1
+
+weekly=weekly %>%
+    mutate(weekNum = week(timestamp))  %>% 
+    filter(status==3) %>%
+    group_by(weekNum) %>%
+    mutate(logintimes=length(userId)) %>%
+    mutate(usernum=n_distinct(userId))
+    
+summary(weekly)
+```
+
+```{r}
+weekly_2=weekly %>%
+    select(weekNum,logintimes,usernum) %>%
+    unique()
+```
+
+```{r}
+weekly_2$weekNum=c(1:19)
+```
+
+
+
+```{r}
+summary(weekly_2)
+```
+
+```{r}
+c=plot_ly(weekly_2,x=~weekNum) %>%
+    add_bars(y=~logintimes,name="Login") %>%
+    add_bars(y=~usernum,name="Users") %>%
+    layout(
+        title = "Weekly Logins and Users Numbers",
+        xaxis = list(
+            rangeselector = list(
+                buttons = list(
+                    list(
+                        step = "week",
+                        stepmode = "backward"))),rangeslider = list(type = "date")))
+    
+chart_link = api_create(c, filename="weeklylogin")
+chart_link
+```
+
+
+## 月均活跃度
+
+```{r}
+month=data1 %>%
+    arrange(timestamp) %>%
+    mutate(month = month(timestamp))  %>% 
+    filter(status==3) %>%
+    group_by(month) %>%
+    mutate(logintimes=length(userId)) %>%
+    mutate(usernum=n_distinct(userId))
+```
+
+```{r}
+summary(month)
+```
+
+
+
+```{r}
+monthactive=month %>%
+    group_by(month,userId) %>%
+    mutate(active = ifelse(length(id)>=18, 1,0)) %>%
+    select(month,userId,active) %>%
+    unique() %>%
+    group_by(month) %>%
+    mutate(total=length(userId)) %>%
+    filter(active==1) %>%
+    mutate(activenumber=length(userId)) %>%
+    select(month,activenumber,total) %>%
+    unique() %>%
+    mutate(nonactive=total-activenumber)
+```
+
+```{r}
+summary(monthactive)
+```
+
+```{r}
+monthactive$month=c("Nov","Dec","Jan","Feb","Mar")
+monthactive$month=factor(monthactive$month,levels=c("Nov","Dec","Jan","Feb","Mar"))
+```
+
+
+```{r}
+plot_ly(monthactive,x=~month,mode="line") %>%
+    add_lines(y=~activenumber,name="Active",color="red") %>%
+    add_lines(y=~total,name="Total",color="blue")
+```
+
+```{r}
+data2=data1
+
+data2$time=floor_date(data2$timestamp,"hours")
+
+data2=data2 %>%
+    arrange(time,userId) %>%
+    group_by(time) %>%
+    mutate(all=n_distinct(userId)) %>%
+    mutate(numbers=length(userId))
+
+tslog_day=data2 %>%
+    select(time,all,numbers) %>%
+    unique()
+
+tslog_day2=merge(tslog_day,time,all=TRUE)
+tslog_day2[is.na(tslog_day2)]=0
+```
+
+```{r}
+a=plot_ly(tslog_day2,x=~time) %>%
+    add_bars(y=~numbers,name="Login") %>%
+    add_bars(y=~all,name="Users") %>%
+    layout(
+        title = "Hourly Logins and Users Numbers",
+        xaxis = list(
+            rangeselector = list(
+                buttons = list(
+                    list(
+                        step = "hour",
+                        stepmode = "backward"))),rangeslider = list(type = "date")))
+    
+chart_link = api_create(a, filename="login")
+chart_link
+```
+
+
+## 人均停留时间
+

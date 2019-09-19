@@ -1,0 +1,630 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(gdata)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(chron)
+```
+
+## data cleanning
+
+```{r}
+data = read.csv("ChallengeB_Supplement_onlinelog.csv")
+```
+
+
+###status(1=enter classroom;2= exit classrroom;3=log in;4= log out)
+```{r}
+names(data)[5]<-"status"
+```
+
+###type(1=student;2=teacher)
+```{r}
+names(data)[6]<-"type"
+```
+
+```{r}
+names(data)[7]<-"timestamp"
+```
+
+```{r}
+data$timestamp <- as.POSIXct(data$timestamp)
+```
+
+
+```{r}
+data1 <- filter(data, status %in% c(3, 4))
+```
+
+
+
+### Hourly Data
+
+```{r}
+daily <- data1 %>% 
+  arrange(userId,timestamp) %>%
+  group_by(orgId,userId) %>% 
+  mutate(duration = ifelse(status > lag(status), timestamp - lag(timestamp),NA)) 
+  #group_by(timestamp,hournumber) %>%
+  #mutate(student=n_distinct(userId))
+  #mutate(time=round(timestamp,"hour"))
+```
+
+```{r}
+daily$time=floor_date(daily$timestamp,"hours")
+```
+
+```{r}
+daily=daily %>%
+    arrange(orgId,time,userId) %>%
+    group_by(orgId,type,time) %>%
+    mutate(Users=n_distinct(userId)) %>%
+    mutate(Logins=length(userId))
+```
+
+```{r}
+hourly=daily %>%
+    select(time,orgId,type,Users,Logins) %>%
+    unique()
+```
+
+```{r}
+time=data.frame(time=seq.POSIXt(floor_date(as.POSIXct("2018-12-01 8:00",'%m/%d/%y %H:%M')), floor_date(as.POSIXct("2019-03-17 0:00",'%m/%d/%y %H:%M')), by="hours"))
+```
+
+
+```{r}
+hourly=merge(hourly,time,all=TRUE)
+hourly[is.na(hourly)]=0
+```
+
+
+
+```{r}
+head(hourly)
+```
+
+```{r}
+write.csv(hourly,file="Hourlydat.csv",row.names = TRUE)
+```
+
+
+### Daily Data
+
+
+```{r}
+day=data1
+day$time=floor_date(day$timestamp,"days")
+
+day=day %>%
+    filter(status==3) %>%
+    group_by(orgId,time,type) %>%
+    mutate(Logins=length(userId)) %>%
+    mutate(Users=n_distinct(userId))
+    
+summary(day)
+```
+
+```{r}
+day=day %>%
+    select(orgId,time,type,Logins,Users) %>%
+    unique()
+```
+
+
+```{r}
+time2=data.frame(time=seq.POSIXt(floor_date(as.POSIXct("2018-11-30",'%m/%d/%y')), floor_date(as.POSIXct("2019-03-17",'%m/%d/%y')), by="day"))
+```
+
+```{r}
+day=merge(day,time2,by="time",all=TRUE)
+day[is.na(day)]=0
+```
+
+```{r}
+write.csv(day,file="Dailydat.csv",row.names = TRUE)
+```
+
+### Weekly Data
+
+```{r}
+weekly=data1
+
+weekly=weekly %>%
+    mutate(weekNum = week(timestamp))  %>% 
+    filter(status==3) %>%
+    group_by(orgId,weekNum,type) %>%
+    mutate(Logins=length(userId)) %>%
+    mutate(Users=n_distinct(userId))
+```
+
+```{r}
+weekly=weekly %>%
+    select(orgId,weekNum,type,Logins,Users) %>%
+    unique()
+```
+
+```{r}
+weekly$weekNum[which(weekly$weekNum==13)]<-19
+weekly$weekNum[which(weekly$weekNum==12)]<-18
+weekly$weekNum[which(weekly$weekNum==11)]<-17
+weekly$weekNum[which(weekly$weekNum==10)]<-16
+weekly$weekNum[which(weekly$weekNum==9)]<-15
+weekly$weekNum[which(weekly$weekNum==8)]<-14
+weekly$weekNum[which(weekly$weekNum==7)]<-13
+weekly$weekNum[which(weekly$weekNum==6)]<-12
+weekly$weekNum[which(weekly$weekNum==5)]<-11
+weekly$weekNum[which(weekly$weekNum==4)]<-10
+weekly$weekNum[which(weekly$weekNum==3)]<-9
+weekly$weekNum[which(weekly$weekNum==2)]<-8
+weekly$weekNum[which(weekly$weekNum==1)]<-7
+weekly$weekNum[which(weekly$weekNum==53)]<-6
+weekly$weekNum[which(weekly$weekNum==52)]<-5
+weekly$weekNum[which(weekly$weekNum==51)]<-4
+weekly$weekNum[which(weekly$weekNum==50)]<-3
+weekly$weekNum[which(weekly$weekNum==49)]<-2
+weekly$weekNum[which(weekly$weekNum==48)]<-1
+```
+
+```{r}
+head(weekly)
+```
+
+```{r}
+write.csv(weekly,file="Weeklydat.csv",row.names = TRUE)
+```
+
+### Monthly Data
+
+```{r}
+month=data1 %>%
+    arrange(orgId,timestamp) %>%
+    mutate(month = month(timestamp))  %>% 
+    filter(status==3) %>%
+    group_by(orgId,month,type) %>%
+    mutate(Logins=length(userId)) %>%
+    mutate(Users=n_distinct(userId))
+```
+
+```{r}
+month$month[which(month$month==1)]<-"Jan"
+month$month[which(month$month==2)]<-"Feb"
+month$month[which(month$month==3)]<-"Mar"
+month$month[which(month$month==11)]<-"Nov"
+month$month[which(month$month==12)]<-"Dec"
+```
+
+```{r}
+month=month %>%
+    select(orgId,month,type,Logins,Users) %>%
+    unique()
+```
+
+```{r}
+write.csv(month,file="Monthlydat.csv",row.names = TRUE)
+```
+
+### Time spent
+
+```{r}
+timespentweek=read.csv("table_alluesrs_time_spent_weekly.csv")
+```
+
+```{r}
+tsweek=timespentweek[,c(2,4,5,7)]
+```
+
+```{r}
+tsweek=tsweek %>%
+    group_by(organization,week_num) %>%
+    mutate(avg=mean(weekly_time_spent)) %>%
+    mutate(total=sum(weekly_time_spent)) %>%
+    mutate(min=min(weekly_time_spent)) %>%
+    mutate(max=max(weekly_time_spent)) 
+    
+```
+
+```{r}
+tsweek1=tsweek %>%    
+    filter(type==1) %>%
+    group_by(organization,week_num) %>%
+    mutate(stuavg=mean(weekly_time_spent))
+
+tsweek2=tsweek %>%
+    filter(type==2) %>%
+    group_by(organization,week_num) %>%
+    mutate(teaavg=mean(weekly_time_spent))
+```
+
+```{r}
+tsweek=tsweek %>%
+    select(organization,week_num,avg,total,min,max) %>%
+    unique()
+
+tsweek1=tsweek1 %>%
+    select(organization,week_num,stuavg) %>%
+    unique()
+
+tsweek2=tsweek2 %>%
+    select(organization,week_num,teaavg) %>%
+    unique()
+```
+
+```{r}
+tsweek=merge(tsweek,tsweek1)
+tsweek=merge(tsweek,tsweek2)
+```
+
+```{r}
+tsweek[tsweek<0]=0
+```
+
+```{r}
+ts
+```
+
+
+```{r}
+write.csv(tsweek,file="week.csv",row.names = TRUE)
+```
+
+```{r}
+timespentday=read.csv("table_alluesrs_time_spent_daily.csv")
+```
+
+```{r}
+tsday=timespentday[,c(2,4,5,6,8)]
+```
+
+```{r}
+tsday=tsday %>%
+    group_by(organization,date) %>%
+    mutate(avg=mean(time_spent_daily)) %>%
+    mutate(total=sum(time_spent_daily)) %>%
+    mutate(min=min(time_spent_daily)) %>%
+    mutate(max=max(time_spent_daily)) 
+    
+```
+
+```{r}
+tsday1=tsday %>%    
+    filter(type==1) %>%
+    group_by(organization,date) %>%
+    mutate(stuavg=mean(time_spent_daily))
+
+tsday2=tsday %>%
+    filter(type==2) %>%
+    group_by(organization,date) %>%
+    mutate(teaavg=mean(time_spent_daily))
+```
+
+```{r}
+tsday=tsday %>%
+    select(organization,date,avg,total,min,max) %>%
+    unique()
+
+tsday1=tsday1 %>%
+    select(organization,date,stuavg) %>%
+    unique()
+
+tsday2=tsday2 %>%
+    select(organization,date,teaavg) %>%
+    unique()
+```
+
+```{r}
+tsday=merge(tsday,tsday1)
+tsday=merge(tsday,tsday2)
+tsday$date=as.POSIXct(tsday$date)
+```
+
+```{r}
+tsday[tsday<0]=0
+```
+
+```{r}
+write.csv(tsday,file="day.csv",row.names = TRUE)
+```
+
+### Profile
+
+```{r}
+org1=data %>%
+    select(orgId,userId,type) %>%
+    unique() %>%
+    group_by(orgId) %>%
+    mutate(total=length(userId)) %>%
+    select(orgId,total) %>%
+    unique()
+
+org3=data %>%
+    select(orgId,userId,type) %>%
+    unique() %>%
+    filter(type==1) %>%
+    group_by(orgId) %>%
+    mutate(student=length(userId)) %>%
+    select(orgId,student) %>%
+    unique()
+
+org2=data %>%
+    select(orgId,userId,type) %>%
+    unique() %>%
+    group_by(orgId) %>%
+    filter(type==2) %>%
+    mutate(teacher=length(userId)) %>%
+    select(orgId,teacher) %>%
+    unique()
+```
+
+```{r}
+org3[19,]=c(100141,0)
+org3[20,]=c(100145,0)
+```
+
+```{r}
+org=merge(org1,org2)
+org=merge(org,org3)
+```
+
+
+```{r}
+org=org %>%
+    mutate(ratio=student/teacher)
+```
+
+```{r}
+organ=read_csv("organization.csv")
+organ=organ %>%
+    select(orgId,province)
+```
+
+```{r}
+org=merge(org,organ)
+```
+
+
+```{r}
+health=read.csv("table_health_score_total.csv")
+vital=read.csv("table_score_vital.csv")
+```
+
+
+```{r}
+profile=merge(org,health)
+profile=merge(profile,vital)
+```
+
+
+```{r}
+profile=write.csv(profile,file="profile.csv",row.names = TRUE)
+```
+
+
+```{r}
+base_plot <- plot_ly(
+  type = "pie",
+  values = c(40, 10, 10, 10, 10, 10, 10),
+  labels = c("-", "0", "20", "40", "60", "80", "100"),
+  rotation = 108,
+  direction = "clockwise",
+  hole = 0.4,
+  textinfo = "label",
+  textposition = "outside",
+  hoverinfo = "none",
+  domain = list(x = c(0, 0.48), y = c(0, 1)),
+  marker = list(colors = c('rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)')),
+  showlegend = FALSE
+)
+```
+
+
+```{r}
+base_plot <- add_trace(
+  base_plot,
+  type = "pie",
+  values = c(50, 10, 10, 10, 10, 10),
+  labels = c("Health Score", "Nonactive", "Active", "Moderate", "Good", "Healthy"),
+  rotation = 90,
+  direction = "clockwise",
+  hole = 0.3,
+  textinfo = "label",
+  textposition = "inside",
+  hoverinfo = "none",
+  domain = list(x = c(0, 0.48), y = c(0, 1)),
+  marker = list(colors = c('rgb(255, 255, 255)', '#FF3400', '#FF8C00', '#FFF600', '#8DFF00', '#00FF00')),
+  showlegend= FALSE
+)
+```
+
+```{r}
+a <- list(
+  showticklabels = FALSE,
+  autotick = FALSE,
+  showgrid = FALSE,
+  zeroline = FALSE)
+
+b <- list(
+  xref = 'paper',
+  yref = 'paper',
+  x = 0.23,
+  y = 0.45,
+  showarrow = FALSE,
+  text = '50')
+
+base_chart <- layout(
+  base_plot,
+  shapes = list(
+    list(
+      type = 'path',
+      path = 'M 0.235 0.5 L 0.24 0.62 L 0.245 0.5 Z',
+      xref = 'paper',
+      yref = 'paper',
+      fillcolor = 'rgba(44, 160, 101, 0.5)'
+    )
+  ),
+  xaxis = a,
+  yaxis = a,
+  annotations = b
+)
+base_chart
+```
+
+```{r}
+if(length(input$userId==0)){
+              d2=tsweek %>%
+                  filter(input$organization)
+              plot_ly(data=d2,x=~week_num) %>%
+                  add_lines(y=~avg,name="Average Time Spent") %>%
+                  add_lines(y=~total,name="Total Time Spent") %>%
+                  add_lines(y=~min,name="Minimum Time Spent") %>%
+                  add_lines(y=~max,name="Maximum Time Spent") %>%
+                  add_lines(y=stuavg,name="Student Average") %>%
+                  add_lines(y=~teaavg,name="Teacher Average")
+          }
+```
+
+
+
+```{r}
+data_users=data %>%
+    select(orgId,userId) %>%
+    unique()
+```
+
+```{r}
+write.csv(data_users,file="users.csv",row.names = TRUE)
+```
+
+
+```{r}
+d1=data_users %>%
+    filter(orgId == 100039) %>%
+    select(userId)
+d2=data_users %>%
+    filter(orgId == 100057) %>%
+    select(userId)
+d3=data_users %>%
+    filter(orgId == 100059) %>%
+    select(userId)
+d5=data_users %>%
+    filter(orgId == 100069) %>%
+    select(userId)
+d6=data_users %>%
+    filter(orgId == 100071) %>%
+    select(userId)
+d7=data_users %>%
+    filter(orgId == 100082) %>%
+    select(userId)
+d8=data_users %>%
+    filter(orgId == 100085) %>%
+    select(userId)
+d9=data_users %>%
+    filter(orgId == 100086) %>%
+    select(userId)
+d10=data_users %>%
+    filter(orgId == 100088) %>%
+    select(userId)
+d11=data_users %>%
+    filter(orgId == 100090) %>%
+    select(userId)
+d12=data_users %>%
+    filter(orgId == 100100) %>%
+    select(userId)  
+d13=data_users %>%
+    filter(orgId == 100102) %>%
+    select(userId)
+d14=data_users %>%
+    filter(orgId == 100118) %>%
+    select(userId)
+d15=data_users %>%
+    filter(orgId == 100133) %>%
+    select(userId)
+d16=data_users %>%
+    filter(orgId == 100138) %>%
+    select(userId)
+d17=data_users %>%
+    filter(orgId == 100139) %>%
+    select(userId)
+d18=data_users %>%
+    filter(orgId == 100141) %>%
+    select(userId)
+d19=data_users %>%
+    filter(orgId == 100145) %>%
+    select(userId)
+d20=data_users %>%
+    filter(orgId == 100155) %>%
+    select(userId)
+```
+
+```{r}
+users=cbind(d1,d2)
+```
+
+## classification
+
+```{r}
+class=read.csv("in_after_class.csv")
+```
+
+```{r}
+head(class)
+```
+
+```{r}
+class$inclasstime=class$inclasstime/60
+class$afterclasstime=class$afterclasstime/60
+```
+
+
+
+```{r}
+time2=data.frame(date=seq.POSIXt(floor_date(as.POSIXct("2018-11-30",'%m/%d/%y')), floor_date(as.POSIXct("2019-03-17",'%m/%d/%y')), by="day"))
+```
+
+```{r}
+class$date=as.POSIXct(class$date)
+```
+```{r}
+class=merge(class,time2,by="date",all=TRUE)
+```
+
+```{r}
+class2[is.na(class2)]=0
+```
+
+```{r}
+class1=class %>%
+    filter(userId==72970) %>%
+    select(userId,date,inclasstime,afterclasstime) %>%
+    arrange(date)
+class2=merge(class1,time2,by="date",all=TRUE)
+```
+
+```{r}
+typeof(class1)
+```
+
+
+```{r}
+write.csv(class,file="class.csv",row.names = TRUE)
+```
+
+
+```{r}
+mission=read.csv("mission.csv")
+```
+
+```{r}
+mission2=mission %>%
+    filter(org_id==100071)
+mission2$date=as.POSIXct(mission2$date)
+ggplot(mission2,aes(x=date,y=rate,order=mission_type_id))+geom_bar(stat="identity",aes(fill=factor(mission_type_id)))+scale_fill_brewer(palette="blues")+theme_bw()
+ggplot(mission2,aes(x=date,y=rate,order=mission_type_id))+geom_area(aes(fill=factor(mission_type_id)))+theme_bw()
+```
+
