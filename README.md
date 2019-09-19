@@ -5,3 +5,5 @@ company like Learnta, who want to expand their software services into the field 
 Our customer success project aims to analyze the behaviors of Learnta organizations and
 provides statistical methods to measure the customer health and active degree based on the given
 data.
+
+Please check out the report to see what we did.
